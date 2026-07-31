@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+@theme {
+  --color-cream: #FBFBF9;
+  --color-matcha: #6E8B74;
+  --color-graphite: #2C302E;
+  --color-warmgray: #F2F2EE;
+  
+  --color-p1-light: #F8EBEA;
+  --color-p1-text: #C87A76;
+  --color-p1-border: #E6C9C7;
+  
+  --color-p2-light: #EFF4F0;
+  --color-p2-text: #6E8B74;
+  --color-p2-border: #C1D5C5;
+  
+  --color-p3-light: #FDF6EC;
+  --color-p3-text: #D4A373;
+  --color-p3-border: #EEDCCA;
+  
+  --color-p4-light: #F2F2EE;
+  --color-p4-text: #8A8E8B;
+  --color-p4-border: #D5D7D6;
+}
+
+/* ...rest of your CSS... */
