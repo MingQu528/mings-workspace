@@ -173,7 +173,47 @@ export function useWorkspace() {
     return list
   })
 
+
+  // ================== 🌟 新增：工作计划专属状态 ==================
+  const douyinRevenue = ref(0); // 抖音本月预计收益
+  const workTabs = ref({ 'Lilac': '日计划', 'b2b': '日计划', '抖音': '日计划', 'youtube': '日计划' }); // 记录四个板块各自停留在哪个标签
+
+  const setWorkTab = (category, tab) => { workTabs.value[category] = tab; };
+  const getWorkTasks = (timeframe, category) => tasks.value.filter(t => t.timeframe === timeframe && t.category === category);
+
+  // ================== 🌟 新增：跨期自动清理系统 ==================
+  const checkAndResetTasks = (lastDateStr) => {
+      if (!lastDateStr) return false;
+      const last = new Date(lastDateStr);
+      const now = new Date();
+      
+      // 抹除具体时分秒，只比较纯日期
+      const lastDay = new Date(last.getFullYear(), last.getMonth(), last.getDate());
+      const currentDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      
+      if (currentDay > lastDay) {
+          // 1. 跨天了：清理已完成的【日计划】
+          tasks.value = tasks.value.filter(t => !(t.timeframe === '日计划' && t.completed));
+          
+          // 2. 跨周了（基于周日结束，周一刷新）：清理已完成的【周计划】
+          const getMonday = (d) => { const x = new Date(d); x.setDate(x.getDate() - (x.getDay() === 0 ? 7 : x.getDay()) + 1); return x; };
+          if (getMonday(currentDay) > getMonday(lastDay)) {
+              tasks.value = tasks.value.filter(t => !(t.timeframe === '周计划' && t.completed));
+          }
+          
+          // 3. 跨月了：清理已完成的【月计划】
+          if (currentDay.getMonth() !== lastDay.getMonth() || currentDay.getFullYear() !== lastDay.getFullYear()) {
+              tasks.value = tasks.value.filter(t => !(t.timeframe === '月计划' && t.completed));
+          }
+          return true; // 返回 true 表示触发了清理，需要保存到数据库
+      }
+      return false;
+    };
+
+
+
   return {
+    douyinRevenue, workTabs, setWorkTab, getWorkTasks,
     isSupabaseConfigured, isSyncing, loadData,
     tasks, health, getTasks, addTask, deleteTask, cyclePriority, proteinTarget,
     douyinProgress, douyinTopics, douyinOrders, youtubeSkillProgress, youtubeProdProgress, youtubeTopics, addDouyinItem, removeDouyinItem, addYoutubeTopic, removeYoutubeTopic,
