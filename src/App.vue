@@ -22,7 +22,7 @@ const {
 
 // 2. Local UI State
 const isSidebarOpen = ref(true)
-const currentRoute = ref('today')
+const currentRoute = ref('work')
 const plannerTab = ref('工作')
 const videoSubTab = ref('douyin')
 const englishSubTab = ref('reading')
@@ -38,7 +38,7 @@ const jpQuizIndex = ref(0)
 const showJpAnswer = ref(false)
 
 const navItems = [
-  { id: 'today', icon: LayoutDashboard, label: '工作计划' },
+  { id: 'work', icon: LayoutDashboard, label: '工作计划' },
   { id: 'planner', icon: CalendarDays, label: '日/周/月计划' },
   { id: 'health', icon: HeartPulse, label: '身体指标' },
   { id: 'video', icon: Clapperboard, label: '视频灵感' },
@@ -123,23 +123,65 @@ onMounted(() => loadData())
       
       <!-- PAGE 1: Today -->
       <div v-if="currentRoute === 'work'" class="p-8 lg:p-12 max-w-7xl mx-auto space-y-8 animate-fade-in">
-        <header>
-          <h2 class="text-sm font-medium text-graphite/50 mb-2">{{ todayDate }}</h2>
-          <h1 class="text-3xl font-bold flex items-center gap-4">今日概览</h1>
-        </header>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div v-for="category in ['工作', '生活', '学习', '运动']" :key="category" class="bg-white p-6 rounded-2xl border border-warmgray shadow-sm">
-            <h3 class="font-bold text-graphite mb-4 flex justify-between items-center">
-              {{ category }} 计划
-              <button @click="addTask('today', category)" class="text-matcha hover:bg-matcha/10 p-1.5 rounded-full"><Plus class="w-4 h-4" /></button>
-            </h3>
-            <div class="space-y-3">
-              <TaskItem v-for="task in getTasks('today', category)" :key="task.id" :task="task" @delete="deleteTask" @cycle="cyclePriority" />
-              <div v-if="getTasks('today', category).length === 0" class="text-xs text-graphite/40 italic">暂无安排...</div>
+                <header>
+                    <h2 class="text-sm font-medium text-graphite/50 mb-2">{{ todayDate }}</h2>
+                    <h1 class="text-3xl font-bold flex items-center gap-4">工作计划矩阵</h1>
+                </header>
+
+                <!-- 四大业务板块网格 -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    
+                    <div v-for="category in ['Lilac', 'b2b', '抖音', 'youtube']" :key="category" class="bg-white p-5 rounded-2xl border border-warmgray shadow-sm flex flex-col relative overflow-hidden group">
+                        
+                        <!-- 标题区 -->
+                        <div class="flex justify-between items-center mb-4 relative z-10">
+                            <h3 class="font-bold text-graphite text-lg flex items-center gap-2">
+                                <i v-if="category === 'Lilac'" data-lucide="sparkles" class="w-4 h-4 text-p1-text"></i>
+                                <i v-if="category === 'b2b'" data-lucide="briefcase" class="w-4 h-4 text-blue-500"></i>
+                                <i v-if="category === '抖音'" data-lucide="music-2" class="w-4 h-4 text-matcha"></i>
+                                <i v-if="category === 'youtube'" data-lucide="youtube" class="w-4 h-4 text-red-500"></i>
+                                {{ category }}
+                            </h3>
+                        </div>
+
+                        <!-- 🌟 抖音专属：本月预计收益仪表盘 -->
+                        <div v-if="category === '抖音'" class="mb-5 p-4 bg-gradient-to-br from-warmgray/40 to-cream rounded-xl border border-warmgray flex flex-col items-center justify-center relative shadow-inner">
+                            <i data-lucide="pie-chart" class="absolute top-2 right-2 w-3 h-3 text-graphite/20"></i>
+                            <div class="text-[10px] font-bold text-graphite/40 mb-1 uppercase tracking-widest">本月预计收益 (¥)</div>
+                            <div class="flex items-baseline gap-1">
+                                <span class="text-graphite/50 font-bold text-lg">¥</span>
+                                <input type="number" v-model.number="douyinRevenue" class="text-3xl font-black text-matcha bg-transparent text-center outline-none w-24 border-b border-dashed border-matcha/30 focus:border-matcha transition-colors" />
+                            </div>
+                        </div>
+
+                        <!-- 维度切换 Tab (日/周/月) -->
+                        <div class="flex bg-warmgray/50 p-1 rounded-lg mb-4">
+                            <button v-for="tf in ['日计划', '周计划', '月计划']" :key="tf" 
+                                @click="setWorkTab(category, tf)" 
+                                :class="['flex-1 py-1.5 rounded-md text-xs font-bold transition-all', workTabs[category] === tf ? 'bg-white text-graphite shadow-sm' : 'text-graphite/40 hover:text-graphite/70']">
+                                {{ tf.charAt(0) }}
+                            </button>
+                        </div>
+
+                        <!-- 任务列表 -->
+                        <div class="space-y-2.5 flex-1 min-h-[150px]">
+                            <task-item v-for="task in getWorkTasks(workTabs[category], category)" :key="task.id" :task="task" @delete="deleteTask" @cycle="cyclePriority"></task-item>
+                            
+                            <!-- 空状态提示 -->
+                            <div v-if="getWorkTasks(workTabs[category], category).length === 0" class="text-xs text-graphite/30 italic text-center py-6 flex flex-col items-center justify-center gap-2">
+                                <i data-lucide="inbox" class="w-5 h-5 opacity-50"></i>
+                                暂无{{ workTabs[category] }}
+                            </div>
+                        </div>
+                        
+                        <!-- 底部新增按钮 -->
+                        <button @click="addTask(workTabs[category], category)" class="mt-4 w-full py-2.5 border border-dashed border-warmgray rounded-xl text-graphite/40 hover:text-matcha hover:border-matcha hover:bg-matcha/5 transition-all text-xs font-bold flex items-center justify-center gap-1">
+                            <i data-lucide="plus" class="w-3.5 h-3.5"></i> 新增{{ workTabs[category].charAt(0) }}任务
+                        </button>
+                    </div>
+
+                </div>
             </div>
-          </div>
-        </div>
-      </div>
 
       <!-- PAGE 2: Planner -->
       <div v-else-if="currentRoute === 'planner'" class="p-8 lg:p-12 max-w-6xl mx-auto space-y-8 animate-fade-in">
