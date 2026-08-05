@@ -1,11 +1,123 @@
 import { ref, computed, watch } from 'vue'
 import { supabase } from '../lib/supabase'
 
-// 保持你原有所有模块的状态不变
 const isSupabaseConfigured = ref(true)
 const isSyncing = ref(false)
 const tasks = ref([])
-const health = ref({ weight: 0, targetWeight: 0, bodyFat: 0, cycle_phase: 'follicular' })
+
+// 🩺 升级后的健康与身体指标状态（支持历史趋势与多维围度）
+const health = ref({
+  height: 165, // 身高 (cm)
+  weight: 62.6, // 当前体重
+  targetWeight: 58, // 目标体重
+  bodyFat: 29, // 当前体脂率
+  targetBodyFat: 26, // 目标体脂率
+  measurements: { waist: '', hips: '', thigh: '' }, // 围度
+  history: [
+    { id: 1, date: '2026-07-18', weight: 62.6, bodyFat: 29, waist: '', hips: '' },
+    { id: 2, date: '2026-08-01', weight: 62.2, bodyFat: 28.5, waist: '', hips: '' }
+  ]
+})
+
+// 🏋️‍♀️ 内置的科学抗阻训练计划 (Week A & Week B 双周循环)
+const workoutPlans = ref({
+  'Week A': [
+    {
+      day: 'Day 1: 上肢 A1 (推为主)',
+      focus: '上胸 / 背阔肌宽度 / 三角肌中束',
+      exercises: [
+        { name: '上斜哑铃卧推', weight: '20kg (总重/单只按习惯)', sets: '3组 × 8-10次', rir: 'RIR 1-2' },
+        { name: '胸支撑划船 / 坐姿划船', weight: '27kg', sets: '3组 × 10-12次', rir: '保护下背部' },
+        { name: '高位下拉', weight: '30kg', sets: '3组 × 10-12次', rir: '拉宽背阔肌' },
+        { name: '哑铃推肩', weight: '8kg', sets: '3组 × 8-10次', rir: '核心收紧' },
+        { name: '缆绳侧平举', weight: '轻重量', sets: '3组 × 12-15次', rir: '全程恒定张力' },
+        { name: '二头/三头超级组', weight: '自选', sets: '各 3组 × 12次', rir: '手臂线条雕刻' }
+      ]
+    },
+    {
+      day: 'Day 2: 下肢 A1 (臀与后侧链)',
+      focus: '臀大肌 / 腘绳肌 (扁平足友好)',
+      exercises: [
+        { name: '杠铃臀推', weight: '80kg', sets: '3组 × 8-10次', rir: '核心王牌动作' },
+        { name: '罗马尼亚硬拉', weight: '40kg', sets: '3组 × 8-10次', rir: '平底鞋发力防足弓塌陷' },
+        { name: '坐姿腿弯举 (固定器械)', weight: '固定器械', sets: '3组 × 10-12次', rir: '零足部压力' },
+        { name: '斜向腿压板 (高脚位)', weight: '中等', sets: '3组 × 10-12次', rir: '主攻臀大肌' },
+        { name: '死虫式核心训练', weight: '自重', sets: '3组 × 每侧10次', rir: '核心稳定' }
+      ]
+    },
+    {
+      day: 'Day 3: 上肢 A2 (拉与厚度雕刻)',
+      focus: '胸肌下沿 / 中背部厚度 / 肩后束',
+      exercises: [
+        { name: '平板哑铃卧推 / 机器推胸', weight: '自选', sets: '3组 × 8-10次', rir: '长行程刺激' },
+        { name: '单臂哑铃划船', weight: '自选', sets: '3组 × 8-12次/侧', rir: '单侧深度雕刻' },
+        { name: '反握高位下拉', weight: '30kg', sets: '3组 × 10-12次', rir: '更多动用二头' },
+        { name: '哑铃侧平举', weight: '小重量', sets: '3组 × 12-15次', rir: '三角肌中束' },
+        { name: '缆绳夹胸 / 飞鸟', weight: '轻重量', sets: '3组 × 12-15次', rir: '伸展顶点拉伸' },
+        { name: '俯身哑铃飞鸟', weight: '小重量', sets: '3组 × 15次', rir: '改善圆肩驼背' }
+      ]
+    },
+    {
+      day: 'Day 4: 下肢 A2 (前侧大腿与单侧)',
+      focus: '股四头肌 / 单侧平衡',
+      exercises: [
+        { name: '哈克深蹲 或 坐姿腿屈伸', weight: '机器', sets: '3组 × 10-12次', rir: '对扁平足绝对安全' },
+        { name: '保加利亚分腿蹲', weight: '轻哑铃/徒手', sets: '3组 × 8-10次/侧', rir: '雕刻线条' },
+        { name: '俯卧腿弯举', weight: '机器', sets: '3组 × 12次', rir: '腘绳肌孤立' },
+        { name: '45度山羊挺身 (圆背主攻臀)', weight: '自重/轻铃', sets: '3组 × 12-15次', rir: '臀部发力拉起' },
+        { name: '平板支撑', weight: '自重', sets: '3组 × 45秒', rir: '核心强化' }
+      ]
+    }
+  ],
+  'Week B': [
+    {
+      day: 'Day 1: 上肢 B1 (变式推与厚度)',
+      focus: '自由重量平衡 / 中背部 / 手臂',
+      exercises: [
+        { name: '平板哑铃卧推', weight: '自选', sets: '3组 × 8-10次', rir: '锻炼核心平衡' },
+        { name: '窄距坐姿划船 (V把)', weight: '27kg', sets: '3组 × 10-12次', rir: '刺激中背部厚度' },
+        { name: '直臂下压', weight: '轻重量', sets: '3组 × 12-15次', rir: '孤立背阔肌' },
+        { name: '坐姿哑铃推肩 (靠椅背)', weight: '8kg', sets: '3组 × 8-10次', rir: '保护腰椎' },
+        { name: '哑铃侧平举', weight: '小重量', sets: '3组 × 12-15次', rir: '中束持续刺激' },
+        { name: '哑铃交替二头弯举', weight: '自选', sets: '3组 × 12次', rir: '手臂线条' }
+      ]
+    },
+    {
+      day: 'Day 2: 下肢 B1 (髋关节主导)',
+      focus: '臀桥变式 / 高脚杯深蹲',
+      exercises: [
+        { name: '杠铃/壶铃高位臀桥', weight: '自选', sets: '3组 × 10-12次', rir: '改变发力行程' },
+        { name: '哑铃罗马尼亚硬拉', weight: '灵活重量', sets: '3组 × 10-12次', rir: '灵活度更高' },
+        { name: '单腿坐姿腿弯举', weight: '单侧', sets: '3组 × 10次/侧', rir: '排查两侧不平衡' },
+        { name: '高脚杯深蹲 (抱哑铃)', weight: '轻哑铃', sets: '3组 × 10-12次', rir: '重心靠后,扁平足友好' },
+        { name: '鸟狗式核心训练', weight: '自重', sets: '3组 × 每侧10次', rir: '核心稳定性' }
+      ]
+    },
+    {
+      day: 'Day 3: 上肢 B2 (夹胸与背宽度变式)',
+      focus: '上斜推胸 / 宽握下拉 / 三角肌后束',
+      exercises: [
+        { name: '上斜机器推胸', weight: '中等', sets: '3组 × 8-10次', rir: '安全高效' },
+        { name: 'T杠划船 或 杠铃划船', weight: '控制重量', sets: '3组 × 8-10次', rir: '背部整体厚度' },
+        { name: '宽握高位下拉', weight: '30kg', sets: '3组 × 10-12次', rir: '强化背阔肌外侧' },
+        { name: '蝴蝶机夹胸', weight: '固定器械', sets: '3组 × 12-15次', rir: '纯粹胸部孤立' },
+        { name: '面拉 (Face Pull)', weight: '缆绳', sets: '3组 × 15次', rir: '三角肌后束与体态黄金动作' }
+      ]
+    },
+    {
+      day: 'Day 4: 下肢 B2 (股四头肌孤立与单侧)',
+      focus: '大腿前侧燃烧 / 反向弓步',
+      exercises: [
+        { name: '坐姿腿屈伸', weight: '机器', sets: '3组 × 12-15次', rir: '股四头肌孤立燃烧' },
+        { name: '单腿腿压板', weight: '单侧', sets: '3组 × 10次/侧', rir: '单侧突破' },
+        { name: '仰卧双腿腿弯举', weight: '器械', sets: '3组 × 12次', rir: '后侧链强化' },
+        { name: '反向弓步蹲 (护膝足弓)', weight: '徒手/轻铃', sets: '3组 × 每侧10次', rir: '对膝盖和足弓更友好' },
+        { name: '侧支撑', weight: '自重', sets: '3组 × 每侧30-45秒', rir: '侧腹与稳定性' }
+      ]
+    }
+  ]
+})
+
 const agendaItems = ref([])
 const douyinProgress = ref({ current: 0, total: 40 })
 const douyinTopics = ref([])
@@ -27,7 +139,6 @@ const lastSyncDate = ref(new Date().toISOString())
 const activeTab = ref('工作')
 const activePlanPeriod = ref('日计划')
 
-// 📅 你的新日程表（预设了和森下的会议）
 const schedules = ref([
   {
     id: 'sch-initial',
@@ -38,7 +149,6 @@ const schedules = ref([
   }
 ])
 
-// 📝 你的新计划板（干净的底子，等待装填）
 const plans = ref({
   '日计划': [],
   '周计划': [],
@@ -46,6 +156,29 @@ const plans = ref({
 })
 
 export function useWorkspace() {
+  // ✨ 添加身体指标历史记录的方法
+  const addHealthRecord = () => {
+    const today = new Date().toISOString().split('T')[0]
+    // 避免同一天重复添加多条，直接更新或新增
+    const existing = health.value.history.find(h => h.date === today)
+    if (existing) {
+      existing.weight = health.value.weight
+      existing.bodyFat = health.value.bodyFat
+      existing.waist = health.value.measurements.waist
+      existing.hips = health.value.measurements.hips
+    } else {
+      health.value.history.push({
+        id: Date.now(),
+        date: today,
+        weight: health.value.weight,
+        bodyFat: health.value.bodyFat,
+        waist: health.value.measurements.waist,
+        hips: health.value.measurements.hips
+      })
+    }
+    saveData()
+  }
+
   // ✨ [核心魔法] 午夜清零与时光胶囊传送带
   const checkAndResetTasks = () => {
     if (!lastSyncDate.value) return false;
@@ -58,14 +191,12 @@ export function useWorkspace() {
     if (currentDay > lastDay) {
         let shouldSave = false;
 
-        // 1. 【日计划】午夜魔法：清空今天打勾的，把"明日(isNext:true)"变成"今日(isNext:false)"
         if (plans.value['日计划']) {
             plans.value['日计划'] = plans.value['日计划'].filter(t => !(t.completed && !t.isNext));
             plans.value['日计划'].forEach(t => { if (t.isNext) t.isNext = false; });
             shouldSave = true;
         }
 
-        // 2. 【周计划】周日跨周一魔法：清空本周打勾的，把"下周"变成"本周"
         const getMonday = (d) => {
             const x = new Date(d);
             x.setDate(x.getDate() - (x.getDay() === 0 ? 7 : x.getDay()) + 1);
@@ -79,7 +210,6 @@ export function useWorkspace() {
             }
         }
 
-        // 3. 【月计划】跨月魔法：清空本月打勾的，把"下月"变成"本月"
         if (currentDay.getMonth() !== lastDay.getMonth() || currentDay.getFullYear() !== lastDay.getFullYear()) {
             if (plans.value['月计划']) {
                 plans.value['月计划'] = plans.value['月计划'].filter(t => !(t.completed && !t.isNext));
@@ -90,7 +220,7 @@ export function useWorkspace() {
 
         if (shouldSave) {
             lastSyncDate.value = now.toISOString();
-            return true; // 告诉系统数据变了，需要保存云端
+            return true;
         }
     }
     return false;
@@ -125,7 +255,6 @@ export function useWorkspace() {
         if (d.plans) plans.value = d.plans
         if (d.lastSyncDate) lastSyncDate.value = d.lastSyncDate
 
-        // 数据一落地，立刻检查需不需要启动时光传送带
         if (checkAndResetTasks()) { saveData() }
       }
     } catch (e) {
@@ -159,7 +288,6 @@ export function useWorkspace() {
     saveData()
   }, { deep: true })
 
-  // --- 提供给新界面的【日/周/月计划】与【日程表】操作接口 ---
   const toggleSchedule = (id) => { const item = schedules.value.find(s => s.id === id); if (item) item.completed = !item.completed }
   const addSchedule = (dateStr, title, timeNote = '') => {
     if (!title.trim()) return
@@ -184,10 +312,9 @@ export function useWorkspace() {
   }
   const getPlans = (period, isNext = false) => {
     if (!plans.value[period]) return []
-    return plans.value[period].filter(t => !!t.isNext === isNext) // 核心：通过 isNext 判断是今天还是明天
+    return plans.value[period].filter(t => !!t.isNext === isNext)
   }
 
-  // --- 保持原有其它模块的老接口不变 ---
   const getTasks = (timeframe, category, isNext = false) => { return tasks.value.filter(t => t.timeframe === timeframe && t.category === category && !!t.isNext === isNext); };
   const addTask = (timeframe, category, isNext = false) => { tasks.value.unshift({ id: Date.now(), title: '新计划', category, timeframe, isNext, priority: 'p2', completed: false, isEditing: true }); };
   const addAgendaItem = (dateStr) => { agendaItems.value.push({ id: Date.now(), date: dateStr, time: '14:00', title: '新日程安排', isEditing: true }); };
@@ -251,7 +378,7 @@ export function useWorkspace() {
     schedules, plans, toggleSchedule, addSchedule, deleteSchedule, getSchedulesForDate, togglePlanTask, addPlanTask, deletePlanTask, getPlans,
     lastSyncDate, checkAndResetTasks,
     isSupabaseConfigured, isSyncing, loadData,
-    tasks, health, getTasks, addTask, deleteTask, cyclePriority, proteinTarget,
+    tasks, health, addHealthRecord, workoutPlans, getTasks, addTask, deleteTask, cyclePriority, proteinTarget,
     agendaItems, addAgendaItem, deleteAgendaItem,
     douyinProgress, douyinTopics, douyinOrders, youtubeSkillProgress, youtubeProdProgress, youtubeTopics, addDouyinItem, removeDouyinItem, addYoutubeTopic, removeYoutubeTopic,
     englishShortProgress, englishLongProgress, englishBooks, englishShadowing, collocations, addEnglishBook, removeEnglishBook, addShadowing, removeShadowing, addCollocation, removeCollocation, reviewTasks,
