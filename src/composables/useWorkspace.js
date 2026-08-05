@@ -7,7 +7,6 @@ const isSyncing = ref(false)
 
 const tasks = ref([])
 const health = ref({ weight: 0, targetWeight: 0, bodyFat: 0, cycle_phase: 'follicular' })
-const agendaItems = ref([]); // 存放苹果式日程表的数据
 
 const douyinProgress = ref({ current: 0, total: 40 })
 const douyinTopics = ref([])
@@ -27,95 +26,14 @@ const japaneseBooks = ref([])
 const jpTasks = ref([])
 const jpVocabularies = ref([])
 
-// Sync date tracking
-const lastSyncDate = ref(new Date().toISOString())
-
-// Work Plan & Schedule State
-const activeTab = ref('工作')
-const activePlanPeriod = ref('日计划')
-
-const schedules = ref([
-  {
-    id: 'sch-1',
-    date: '2026-08-06',
-    dateDisplay: '8月6日',
-    timeNote: '日本时间 16:00 / 北京时间 14:00',
-    title: '线上视频会',
-    description: '重要项目线上沟通对接会议',
-    completed: false
-  },
-  {
-    id: 'sch-2',
-    date: '2026-08-07',
-    dateDisplay: '8月7日前',
-    timeNote: '全天截止',
-    title: '做好定价方案',
-    description: '完成产品定价方案与成本收益测算',
-    completed: false
-  }
-])
-
-const plans = ref({
-  '日计划': [
-    { id: 'p-1', title: '工作计划面板修改', completed: true },
-    { id: 'p-2', title: '考勤发给陈豆', completed: false },
-    { id: 'p-3', title: '乳垫ph刷单*2', completed: false },
-    { id: 'p-4', title: '发4个指甲油视频', completed: false },
-    { id: 'p-5', title: '指甲油链接折扣', completed: false },
-    { id: 'p-6', title: '托腹带2.0brief', completed: true },
-    { id: 'p-7', title: 'nh妊娠霜达人发brief*5', completed: false }
-  ],
-  '周计划': [
-    { id: 'pw-1', title: '整理本周销售数据', completed: false }
-  ],
-  '月计划': [
-    { id: 'pm-1', title: '8月份推广策略方案', completed: false }
-  ]
-})
-
-// Auto-reset tasks across periods
-const checkAndResetTasks = (lastDateStr) => {
-    if (!lastDateStr) return false;
-    const last = new Date(lastDateStr);
-    const now = new Date();
-    
-    const lastDay = new Date(last.getFullYear(), last.getMonth(), last.getDate());
-    const currentDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    
-    if (currentDay > lastDay) {
-        // 1. 【日计划】更新：删掉昨天打勾的，把"明日"计划变成"今日"
-        tasks.value = tasks.value.filter(t => !(t.timeframe === '日计划' && !t.isNext && t.completed));
-        tasks.value.forEach(t => { if (t.timeframe === '日计划' && t.isNext) t.isNext = false; });
-        
-        // 2. 【周计划】更新（每周日跨周一刷新）
-        const getMonday = (d) => { const x = new Date(d); x.setDate(x.getDate() - (x.getDay() === 0 ? 7 : x.getDay()) + 1); return x; };
-        if (getMonday(currentDay) > getMonday(lastDay)) {
-            tasks.value = tasks.value.filter(t => !(t.timeframe === '周计划' && !t.isNext && t.completed));
-            tasks.value.forEach(t => { if (t.timeframe === '周计划' && t.isNext) t.isNext = false; });
-            
-            // 顺便清理上周已经过去的日程表事件
-            agendaItems.value = agendaItems.value.filter(item => new Date(item.date) >= getMonday(currentDay));
-        }
-        
-        // 3. 【月计划】更新（跨月刷新）
-        if (currentDay.getMonth() !== lastDay.getMonth() || currentDay.getFullYear() !== lastDay.getFullYear()) {
-            tasks.value = tasks.value.filter(t => !(t.timeframe === '月计划' && !t.isNext && t.completed));
-            tasks.value.forEach(t => { if (t.timeframe === '月计划' && t.isNext) t.isNext = false; });
-        }
-        return true; // 告诉系统需要保存云端
-    }
-    return false;
-};
-
 export function useWorkspace() {
   const loadData = async () => {
     if (!supabase) { isSupabaseConfigured.value = false; return; }
     isSyncing.value = true
     try {
-      const { data } = await supabase.from('my_workspace').select('data').eq('id', 1).single()
+      const { data, error } = await supabase.from('my_workspace').select('data').eq('id', 1).single()
       if (data && data.data) {
         const d = data.data
-        if (d.agendaItems) agendaItems.value = d.agendaItems
         if (d.tasks) tasks.value = d.tasks
         if (d.health) health.value = d.health
         if (d.douyinProgress) douyinProgress.value = d.douyinProgress
@@ -133,9 +51,6 @@ export function useWorkspace() {
         if (d.japaneseBooks) japaneseBooks.value = d.japaneseBooks
         if (d.jpTasks) jpTasks.value = d.jpTasks
         if (d.jpVocabularies) jpVocabularies.value = d.jpVocabularies
-        if (d.schedules) schedules.value = d.schedules
-        if (d.plans) plans.value = d.plans
-        if (d.lastSyncDate) lastSyncDate.value = d.lastSyncDate
       }
     } catch (e) {
       console.error("加载云端数据失败", e)
@@ -152,9 +67,8 @@ export function useWorkspace() {
     syncTimeout = setTimeout(async () => {
       isSyncing.value = true
       
+      // FIX: Strip Vue Proxies before sending to Supabase
       const stateToSave = JSON.parse(JSON.stringify({
-        agendaItems: agendaItems.value,
-        lastSyncDate: lastSyncDate.value,
         tasks: tasks.value, 
         health: health.value,
         douyinProgress: douyinProgress.value, 
@@ -171,15 +85,16 @@ export function useWorkspace() {
         japaneseProgress: japaneseProgress.value, 
         japaneseBooks: japaneseBooks.value, 
         jpTasks: jpTasks.value, 
-        jpVocabularies: jpVocabularies.value,
-        schedules: schedules.value,
-        plans: plans.value
+        jpVocabularies: jpVocabularies.value
       }))
 
       try {
         const { error } = await supabase.from('my_workspace').upsert({ id: 1, data: stateToSave })
+        
+        // FIX: Alert if Supabase rejects the save (e.g., Row Level Security issues)
         if (error) {
           console.error("Supabase 写入失败:", error.message)
+          alert("数据库同步失败: " + error.message)
         }
       } catch (err) {
         console.error("Unexpected Save Error:", err)
@@ -189,70 +104,27 @@ export function useWorkspace() {
     }, 2000)
   }
 
-  watch([tasks, health, douyinProgress, douyinTopics, douyinOrders, youtubeSkillProgress, youtubeProdProgress, youtubeTopics, englishShortProgress, englishLongProgress, englishBooks, englishShadowing, collocations, japaneseProgress, japaneseBooks, jpTasks, jpVocabularies, schedules, plans], () => {
+  // Auto-save when ANY data changes
+  watch([tasks, health, douyinProgress, douyinTopics, douyinOrders, youtubeSkillProgress, youtubeProdProgress, youtubeTopics, englishShortProgress, englishLongProgress, englishBooks, englishShadowing, collocations, japaneseProgress, japaneseBooks, jpTasks, jpVocabularies], () => {
     saveData()
   }, { deep: true })
 
-  // Schedule Logic
-  const toggleSchedule = (id) => {
-    const item = schedules.value.find(s => s.id === id)
-    if (item) item.completed = !item.completed
-  }
-
-  const addSchedule = (date, title, timeNote = '', dateDisplay = '') => {
-    if (!title.trim()) return
-    const d = new Date()
-    schedules.value.unshift({
-      id: 'sch-' + Date.now(),
-      date: date || new Date().toISOString().split('T')[0],
-      dateDisplay: dateDisplay || `${d.getMonth() + 1}月${d.getDate()}日`,
-      timeNote: timeNote || '全天',
-      title: title.trim(),
-      completed: false
-    })
-  }
-
-  const togglePlanTask = (period, id) => {
-    if (!plans.value[period]) return
-    const task = plans.value[period].find(t => t.id === id)
-    if (task) task.completed = !task.completed
-  }
-
-  const addPlanTask = (period, title) => {
-    if (!title.trim()) return
-    if (!plans.value[period]) plans.value[period] = []
-    plans.value[period].unshift({
-      id: 'task-' + Date.now(),
-      title: title.trim(),
-      completed: false
-    })
-  }
-
-  // Tasks Logic
-  const getTasks = (timeframe, category, isNext = false) => {
-    return tasks.value.filter(t => t.timeframe === timeframe && t.category === category && !!t.isNext === isNext);
-  };
-  const addTask = (timeframe, category, isNext = false) => {
-    tasks.value.unshift({ id: Date.now(), title: '新计划', category, timeframe, isNext, priority: 'p2', completed: false, isEditing: true });
-  };
-  // 苹果日程表的专属新增和删除
-  const addAgendaItem = (dateStr) => {
-    agendaItems.value.push({ id: Date.now(), date: dateStr, time: '14:00', title: '新日程安排', isEditing: true });
-  };
-  const deleteAgendaItem = (id) => agendaItems.value = agendaItems.value.filter(i => i.id !== id);
+  // --- Tasks Logic ---
+  const getTasks = (timeframe, category) => tasks.value.filter(t => t.timeframe === timeframe && t.category === category)
+  const addTask = (timeframe, category) => tasks.value.unshift({ id: Date.now(), title: '新任务', category, timeframe, priority: 'p2', completed: false, isEditing: true })
   const deleteTask = (id) => tasks.value = tasks.value.filter(t => t.id !== id)
   const cyclePriority = (task) => { if (!task.completed) task.priority = { p1: 'p2', p2: 'p3', p3: 'p4', p4: 'p1' }[task.priority] }
 
-  // Health Logic
+  // --- Health Logic ---
   const proteinTarget = computed(() => (health.value.weight * 1.8).toFixed(0))
 
-  // Video Logic
+  // --- Video Logic ---
   const addDouyinItem = (type) => { type === 'topic' ? douyinTopics.value.unshift({ id: Date.now(), title: '' }) : douyinOrders.value.unshift({ id: Date.now(), title: '' }) }
   const removeDouyinItem = (type, id) => { type === 'topic' ? douyinTopics.value = douyinTopics.value.filter(i => i.id !== id) : douyinOrders.value = douyinOrders.value.filter(i => i.id !== id) }
   const addYoutubeTopic = () => youtubeTopics.value.unshift({ id: Date.now(), title: '' })
   const removeYoutubeTopic = (id) => youtubeTopics.value = youtubeTopics.value.filter(i => i.id !== id)
 
-  // English Logic
+  // --- English Logic ---
   const addEnglishBook = (title = "", type = "short", cover = "📖") => englishBooks.value.unshift({ id: Date.now() + Math.random(), title, type, readPages: 0, totalPages: 100, cover })
   const removeEnglishBook = (id) => englishBooks.value = englishBooks.value.filter(b => b.id !== id)
   const addShadowing = () => englishShadowing.value.unshift({ id: Date.now(), title: "", date: new Date().toISOString().split('T')[0], content: "", isEditing: true })
@@ -271,12 +143,12 @@ export function useWorkspace() {
     const today = new Date(); today.setHours(0, 0, 0, 0); let list = []
     collocations.value.forEach(g => {
       const d = new Date(g.date); d.setHours(0, 0, 0, 0)
-      if ([1, 2, 4, 7, 15].includes(Math.ceil(Math.abs(today - d) / 86400000))) list.push(...g.items.map(i => ({ ...i, fromDate: g.date })))
+      if ([1, 2, 4, 7, 15, 30].includes(Math.ceil(Math.abs(today - d) / 86400000))) list.push(...g.items.map(i => ({ ...i, fromDate: g.date })))
     })
     return list
   })
 
-  // Japanese Logic
+  // --- Japanese Logic ---
   const addJapaneseBook = (title = "", cover = "📖", chapters = null) => japaneseBooks.value.unshift({ id: Date.now() + Math.random(), title, cover, chapters: chapters || [{ title: "第1课", done: false }] })
   const removeJapaneseBook = (id) => japaneseBooks.value = japaneseBooks.value.filter(b => b.id !== id)
   const getJpTasks = (tf) => jpTasks.value.filter(t => t.timeframe === tf)
@@ -296,17 +168,54 @@ export function useWorkspace() {
     const today = new Date(); today.setHours(0, 0, 0, 0); let list = []
     jpVocabularies.value.forEach(g => {
       const d = new Date(g.date); d.setHours(0, 0, 0, 0)
-      if ([1, 2, 4, 7, 15].includes(Math.ceil(Math.abs(today - d) / 86400000))) list.push(...g.items.map(i => ({ ...i, fromDate: g.date })))
+      if ([1, 2, 4, 7, 15, 30].includes(Math.ceil(Math.abs(today - d) / 86400000))) list.push(...g.items.map(i => ({ ...i, fromDate: g.date })))
     })
     return list
   })
 
+
+  // ================== 🌟 新增：工作计划专属状态 ==================
+  const douyinRevenue = ref(0); // 抖音本月预计收益
+  const workTabs = ref({ 'Lilac': '日计划', 'b2b': '日计划', '抖音': '日计划', 'youtube': '日计划' }); // 记录四个板块各自停留在哪个标签
+
+  const setWorkTab = (category, tab) => { workTabs.value[category] = tab; };
+  const getWorkTasks = (timeframe, category) => tasks.value.filter(t => t.timeframe === timeframe && t.category === category);
+
+  // ================== 🌟 新增：跨期自动清理系统 ==================
+  const checkAndResetTasks = (lastDateStr) => {
+      if (!lastDateStr) return false;
+      const last = new Date(lastDateStr);
+      const now = new Date();
+      
+      // 抹除具体时分秒，只比较纯日期
+      const lastDay = new Date(last.getFullYear(), last.getMonth(), last.getDate());
+      const currentDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      
+      if (currentDay > lastDay) {
+          // 1. 跨天了：清理已完成的【日计划】
+          tasks.value = tasks.value.filter(t => !(t.timeframe === '日计划' && t.completed));
+          
+          // 2. 跨周了（基于周日结束，周一刷新）：清理已完成的【周计划】
+          const getMonday = (d) => { const x = new Date(d); x.setDate(x.getDate() - (x.getDay() === 0 ? 7 : x.getDay()) + 1); return x; };
+          if (getMonday(currentDay) > getMonday(lastDay)) {
+              tasks.value = tasks.value.filter(t => !(t.timeframe === '周计划' && t.completed));
+          }
+          
+          // 3. 跨月了：清理已完成的【月计划】
+          if (currentDay.getMonth() !== lastDay.getMonth() || currentDay.getFullYear() !== lastDay.getFullYear()) {
+              tasks.value = tasks.value.filter(t => !(t.timeframe === '月计划' && t.completed));
+          }
+          return true; // 返回 true 表示触发了清理，需要保存到数据库
+      }
+      return false;
+    };
+
+
+
   return {
-    activeTab, activePlanPeriod, schedules, plans, toggleSchedule, addSchedule, togglePlanTask, addPlanTask,
-    lastSyncDate, checkAndResetTasks,
+    douyinRevenue, workTabs, setWorkTab, getWorkTasks,
     isSupabaseConfigured, isSyncing, loadData,
     tasks, health, getTasks, addTask, deleteTask, cyclePriority, proteinTarget,
-    agendaItems, addAgendaItem, deleteAgendaItem,
     douyinProgress, douyinTopics, douyinOrders, youtubeSkillProgress, youtubeProdProgress, youtubeTopics, addDouyinItem, removeDouyinItem, addYoutubeTopic, removeYoutubeTopic,
     englishShortProgress, englishLongProgress, englishBooks, englishShadowing, collocations, addEnglishBook, removeEnglishBook, addShadowing, removeShadowing, addCollocation, removeCollocation, reviewTasks,
     japaneseProgress, japaneseBooks, jpTasks, jpVocabularies, addJapaneseBook, removeJapaneseBook, getJpTasks, addJpTask, deleteJpTask, addJpVocab, removeJpVocab, jpReviewTasks
