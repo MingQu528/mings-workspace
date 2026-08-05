@@ -106,44 +106,16 @@ const checkAndResetTasks = (lastDateStr) => {
     }
     return false;
 };
-  const now = new Date()
-  const last = new Date(lastSyncDate.value)
-  
-  const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const lastDate = new Date(last.getFullYear(), last.getMonth(), last.getDate())
-  
-  if (todayDate > lastDate) {
-    tasks.value = tasks.value.filter(t => !(t.timeframe === '日计划' && t.completed))
-    
-    const getMonday = (d) => { 
-      const x = new Date(d) 
-      const day = x.getDay()
-      const diff = x.getDate() - day + (day === 0 ? -6 : 1) 
-      return new Date(x.setDate(diff)) 
-    }
-    if (getMonday(todayDate) > getMonday(lastDate)) {
-      tasks.value = tasks.value.filter(t => !(t.timeframe === '周计划' && t.completed))
-    }
-    
-    if (todayDate.getMonth() !== lastDate.getMonth() || todayDate.getFullYear() !== lastDate.getFullYear()) {
-      tasks.value = tasks.value.filter(t => !(t.timeframe === '月计划' && t.completed))
-    }
-    
-    lastSyncDate.value = now.toISOString()
-    return true
-  }
-  return false
-}
 
 export function useWorkspace() {
   const loadData = async () => {
-    if(d.agendaItems) agendaItems.value = d.agendaItems;
     if (!supabase) { isSupabaseConfigured.value = false; return; }
     isSyncing.value = true
     try {
       const { data } = await supabase.from('my_workspace').select('data').eq('id', 1).single()
       if (data && data.data) {
         const d = data.data
+        if (d.agendaItems) agendaItems.value = d.agendaItems
         if (d.tasks) tasks.value = d.tasks
         if (d.health) health.value = d.health
         if (d.douyinProgress) douyinProgress.value = d.douyinProgress
@@ -259,14 +231,14 @@ export function useWorkspace() {
   // Tasks Logic
   const getTasks = (timeframe, category, isNext = false) => {
     return tasks.value.filter(t => t.timeframe === timeframe && t.category === category && !!t.isNext === isNext);
-};
+  };
   const addTask = (timeframe, category, isNext = false) => {
     tasks.value.unshift({ id: Date.now(), title: '新计划', category, timeframe, isNext, priority: 'p2', completed: false, isEditing: true });
-};
-// 苹果日程表的专属新增和删除
+  };
+  // 苹果日程表的专属新增和删除
   const addAgendaItem = (dateStr) => {
     agendaItems.value.push({ id: Date.now(), date: dateStr, time: '14:00', title: '新日程安排', isEditing: true });
-};
+  };
   const deleteAgendaItem = (id) => agendaItems.value = agendaItems.value.filter(i => i.id !== id);
   const deleteTask = (id) => tasks.value = tasks.value.filter(t => t.id !== id)
   const cyclePriority = (task) => { if (!task.completed) task.priority = { p1: 'p2', p2: 'p3', p3: 'p4', p4: 'p1' }[task.priority] }
@@ -299,7 +271,7 @@ export function useWorkspace() {
     const today = new Date(); today.setHours(0, 0, 0, 0); let list = []
     collocations.value.forEach(g => {
       const d = new Date(g.date); d.setHours(0, 0, 0, 0)
-      if (.includes(Math.ceil(Math.abs(today - d) / 86400000))) list.push(...g.items.map(i => ({ ...i, fromDate: g.date })))
+      if ([1, 2, 4, 7, 15].includes(Math.ceil(Math.abs(today - d) / 86400000))) list.push(...g.items.map(i => ({ ...i, fromDate: g.date })))
     })
     return list
   })
@@ -324,7 +296,7 @@ export function useWorkspace() {
     const today = new Date(); today.setHours(0, 0, 0, 0); let list = []
     jpVocabularies.value.forEach(g => {
       const d = new Date(g.date); d.setHours(0, 0, 0, 0)
-      if (.includes(Math.ceil(Math.abs(today - d) / 86400000))) list.push(...g.items.map(i => ({ ...i, fromDate: g.date })))
+      if ([1, 2, 4, 7, 15].includes(Math.ceil(Math.abs(today - d) / 86400000))) list.push(...g.items.map(i => ({ ...i, fromDate: g.date })))
     })
     return list
   })
