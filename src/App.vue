@@ -37,6 +37,17 @@ const showAnswer = ref(false)
 const jpQuizIndex = ref(0)
 const showJpAnswer = ref(false)
 
+// [Baby Step 1 新增]: 本地日程表数据（第一步先在前端跑通 UI，下一步再接入后台）
+const localSchedules = ref([
+  { id: Date.now(), time: '2026-08-06T14:00', title: '和森下开线上会议' }
+])
+const addLocalSchedule = () => {
+  localSchedules.value.push({ id: Date.now() + Math.random(), time: '', title: '' })
+}
+const deleteLocalSchedule = (id) => {
+  localSchedules.value = localSchedules.value.filter(s => s.id !== id)
+}
+
 const navItems = [
   { id: 'work', icon: LayoutDashboard, label: '工作计划' },
   { id: 'planner', icon: CalendarDays, label: '日/周/月计划' },
@@ -121,67 +132,76 @@ onMounted(() => loadData())
     <!-- Main Content Area -->
     <main class="flex-1 overflow-y-auto bg-cream">
       
-      <!-- PAGE 1: Today -->
+      <!-- PAGE 1: Today (工作计划页面改造) -->
       <div v-if="currentRoute === 'work'" class="p-8 lg:p-12 max-w-7xl mx-auto space-y-8 animate-fade-in">
-                <header>
-                    <h2 class="text-sm font-medium text-graphite/50 mb-2">{{ todayDate }}</h2>
-                    <h1 class="text-3xl font-bold flex items-center gap-4">工作计划矩阵</h1>
-                </header>
+        <header>
+          <h2 class="text-sm font-medium text-graphite/50 mb-2">{{ todayDate }}</h2>
+          <h1 class="text-3xl font-bold flex items-center gap-4">工作与日程</h1>
+        </header>
 
-                <!-- 四大业务板块网格 -->
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    
-                    <div v-for="category in ['Lilac', 'b2b', '抖音', 'youtube']" :key="category" class="bg-white p-5 rounded-2xl border border-warmgray shadow-sm flex flex-col relative overflow-hidden group">
-                        
-                        <!-- 标题区 -->
-                        <div class="flex justify-between items-center mb-4 relative z-10">
-                            <h3 class="font-bold text-graphite text-lg flex items-center gap-2">
-                                <i v-if="category === 'Lilac'" data-lucide="sparkles" class="w-4 h-4 text-p1-text"></i>
-                                <i v-if="category === 'b2b'" data-lucide="briefcase" class="w-4 h-4 text-blue-500"></i>
-                                <i v-if="category === '抖音'" data-lucide="music-2" class="w-4 h-4 text-matcha"></i>
-                                <i v-if="category === 'youtube'" data-lucide="youtube" class="w-4 h-4 text-red-500"></i>
-                                {{ category }}
-                            </h3>
-                        </div>
-
-                        <!-- 🌟 抖音专属：本月预计收益仪表盘 -->
-                        <div v-if="category === '抖音'" class="mb-5 p-4 bg-gradient-to-br from-warmgray/40 to-cream rounded-xl border border-warmgray flex flex-col items-center justify-center relative shadow-inner">
-                            <i data-lucide="pie-chart" class="absolute top-2 right-2 w-3 h-3 text-graphite/20"></i>
-                            <div class="text-[10px] font-bold text-graphite/40 mb-1 uppercase tracking-widest">本月预计收益 (¥)</div>
-                            <div class="flex items-baseline gap-1">
-                                <span class="text-graphite/50 font-bold text-lg">¥</span>
-                                <input type="number" v-model.number="douyinRevenue" class="text-3xl font-black text-matcha bg-transparent text-center outline-none w-24 border-b border-dashed border-matcha/30 focus:border-matcha transition-colors" />
-                            </div>
-                        </div>
-
-                        <!-- 维度切换 Tab (日/周/月) -->
-                        <div class="flex bg-warmgray/50 p-1 rounded-lg mb-4">
-                            <button v-for="tf in ['日计划', '周计划', '月计划']" :key="tf" 
-                                @click="setWorkTab(category, tf)" 
-                                :class="['flex-1 py-1.5 rounded-md text-xs font-bold transition-all', workTabs[category] === tf ? 'bg-white text-graphite shadow-sm' : 'text-graphite/40 hover:text-graphite/70']">
-                                {{ tf.charAt(0) }}
-                            </button>
-                        </div>
-
-                        <!-- 任务列表 -->
-                        <div class="space-y-2.5 flex-1 min-h-[150px]">
-                            <task-item v-for="task in getWorkTasks(workTabs[category], category)" :key="task.id" :task="task" @delete="deleteTask" @cycle="cyclePriority"></task-item>
-                            
-                            <!-- 空状态提示 -->
-                            <div v-if="getWorkTasks(workTabs[category], category).length === 0" class="text-xs text-graphite/30 italic text-center py-6 flex flex-col items-center justify-center gap-2">
-                                <i data-lucide="inbox" class="w-5 h-5 opacity-50"></i>
-                                暂无{{ workTabs[category] }}
-                            </div>
-                        </div>
-                        
-                        <!-- 底部新增按钮 -->
-                        <button @click="addTask(workTabs[category], category)" class="mt-4 w-full py-2.5 border border-dashed border-warmgray rounded-xl text-graphite/40 hover:text-matcha hover:border-matcha hover:bg-matcha/5 transition-all text-xs font-bold flex items-center justify-center gap-1">
-                            <i data-lucide="plus" class="w-3.5 h-3.5"></i> 新增{{ workTabs[category].charAt(0) }}任务
+        <!-- 新结构：上下两层布局 -->
+        <div class="flex flex-col gap-8">
+            
+            <!-- 上半部分：本周关键日程表 -->
+            <div class="bg-white p-6 rounded-2xl border border-warmgray shadow-sm">
+                <div class="flex justify-between items-center border-b border-warmgray pb-4 mb-4">
+                    <h3 class="font-bold text-graphite flex items-center gap-2">
+                        <CalendarClock class="w-5 h-5 text-matcha" /> 本周关键日程
+                    </h3>
+                    <button @click="addLocalSchedule" class="text-matcha hover:bg-matcha/10 px-3 py-1.5 rounded-full text-xs flex items-center gap-1 font-medium transition-colors">
+                        <Plus class="w-4 h-4" /> 新增日程
+                    </button>
+                </div>
+                
+                <div class="space-y-3">
+                    <!-- 循环渲染日程项 -->
+                    <div v-for="item in localSchedules" :key="item.id" class="flex gap-4 items-center p-4 rounded-xl border border-warmgray bg-warmgray/20 relative group transition-all hover:border-matcha/30">
+                        <button @click="deleteLocalSchedule(item.id)" class="absolute right-4 text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Trash2 class="w-4 h-4" />
                         </button>
+                        <!-- 时间选择器 -->
+                        <input type="datetime-local" v-model="item.time" class="bg-white border border-warmgray rounded-lg px-3 py-2 text-sm font-semibold outline-none focus:border-matcha text-graphite/80 w-52 shrink-0 cursor-pointer">
+                        <!-- 任务内容 -->
+                        <input type="text" v-model="item.title" placeholder="输入日程内容..." class="flex-1 bg-white border border-warmgray rounded-lg px-3 py-2 text-sm font-semibold outline-none focus:border-matcha text-graphite placeholder:font-normal">
                     </div>
-
+                    
+                    <!-- 空状态 -->
+                    <div v-if="localSchedules.length === 0" class="text-center py-6 text-graphite/40 text-sm italic border-2 border-dashed border-warmgray rounded-xl">
+                        本周暂无安排，放松一下吧☕️
+                    </div>
                 </div>
             </div>
+
+            <!-- 下半部分：日/周/月计划（无痕接入 b2b 数据） -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- 循环渲染三列 -->
+                <div v-for="tf in ['日计划', '周计划', '月计划']" :key="tf" class="bg-white p-5 rounded-2xl border border-warmgray shadow-sm flex flex-col h-full relative group/col">
+                    
+                    <!-- 头部区域 -->
+                    <div class="flex justify-between items-center mb-4 border-b border-warmgray pb-4">
+                        <h3 class="font-bold text-graphite text-lg flex items-center gap-2">
+                            {{ tf }}
+                        </h3>
+                        <button @click="addTask(tf, 'b2b')" class="text-matcha bg-matcha/5 hover:bg-matcha/15 p-2 rounded-lg transition-colors flex items-center gap-1 text-xs font-bold" title="新增计划">
+                            <Plus class="w-3.5 h-3.5" /> 添加
+                        </button>
+                    </div>
+                    
+                    <!-- 任务列表区域 -->
+                    <div class="space-y-3 flex-1 min-h-[200px]">
+                        <!-- 无缝获取原属于 'b2b' 分类的任务 -->
+                        <task-item v-for="task in getWorkTasks(tf, 'b2b')" :key="task.id" :task="task" @delete="deleteTask" @cycle="cyclePriority"></task-item>
+                        
+                        <!-- 列表空状态 -->
+                        <div v-if="getWorkTasks(tf, 'b2b').length === 0" class="text-xs text-graphite/30 italic text-center py-10 flex flex-col items-center justify-center gap-2 h-full">
+                            提前规划你的{{ tf }}...
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+      </div>
 
       <!-- PAGE 2: Planner -->
       <div v-else-if="currentRoute === 'planner'" class="p-8 lg:p-12 max-w-6xl mx-auto space-y-8 animate-fade-in">
