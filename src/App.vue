@@ -37,9 +37,12 @@ const showAnswer = ref(false)
 const jpQuizIndex = ref(0)
 const showJpAnswer = ref(false)
 
-// [核心] 控制计划板切换 (false代表当前/今日/本周/本月, true代表下一个周期/明日/下周/下月)
+// [核心] 控制工作计划板切换 (false代表当前, true代表下一个周期)
 const columnTabs = ref({ '日计划': false, '周计划': false, '月计划': false })
 const newPlanInputs = ref({ '日计划': '', '周计划': '', '月计划': '' })
+
+// [核心] 控制全周期规划(planner)板切换
+const plannerColumnTabs = ref({ '日计划': false, '周计划': false, '月计划': false })
 
 // 处理回车或点击加号添加新计划
 const handleAddNewPlan = (timeframe) => {
@@ -169,7 +172,7 @@ onMounted(() => {
         <!-- 上下两层布局 -->
         <div class="flex flex-col gap-8">
             
-            <!-- 上半部分：本周关键日程表（已去除滚动条，增大核心字体占比） -->
+            <!-- 上半部分：本周关键日程表 -->
             <div class="bg-white rounded-3xl p-6 shadow-sm border border-warmgray overflow-hidden">
                 <h3 class="font-bold text-lg text-graphite mb-6 flex items-center gap-2"><CalendarClock class="w-5 h-5 text-matcha" /> 本周日程</h3>
                 <div class="overflow-x-auto pb-2">
@@ -180,7 +183,6 @@ onMounted(() => {
                                 <div class="text-lg font-black mt-0.5">{{ day.dateStr }}</div>
                             </div>
                             <div class="p-2 flex-1 min-h-[160px] space-y-2 relative group flex flex-col">
-                                <!-- 日程卡片：优化字体占比，移除滚动条 -->
                                 <div v-for="item in getSchedulesForDate(day.fullDate)" :key="item.id" class="relative bg-white border border-warmgray rounded-xl p-3 shadow-sm group/item space-y-1">
                                     <button @click="deleteSchedule(item.id)" class="absolute -top-2 -right-2 bg-white border border-warmgray text-red-400 rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover/item:opacity-100 hover:text-red-600 shadow-sm z-10 transition-opacity"><Trash2 class="w-3 h-3" /></button>
                                     <input type="text" v-model="item.timeNote" placeholder="时间(14:00)" class="w-full text-matcha text-sm font-extrabold bg-transparent outline-none">
@@ -196,14 +198,14 @@ onMounted(() => {
                 </div>
             </div>
 
-            <!-- 下半部分：日/周/月计划（已去除 Emoji 图标，规范今日/明日等标签） -->
+            <!-- 下半部分：日/周/月计划（标题精简为：日、周、月） -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div v-for="(label, timeframe) in {'日计划': ['今日', '明日'], '周计划': ['本周', '下周'], '月计划': ['本月', '下月']}" :key="timeframe" class="bg-white p-6 rounded-3xl border border-warmgray shadow-sm flex flex-col">
                     
-                    <!-- 头部切换器（无 Emoji 纯净标题） -->
+                    <!-- 头部切换器（精简标题为单字：日、周、月） -->
                     <div class="flex justify-between items-center border-b border-warmgray pb-4 mb-4">
-                        <h3 class="font-bold text-graphite text-lg">
-                            {{ timeframe }}
+                        <h3 class="font-bold text-graphite text-xl">
+                            {{ {'日计划': '日', '周计划': '周', '月计划': '月'}[timeframe] }}
                         </h3>
                         <div class="flex bg-warmgray/50 p-1 rounded-xl">
                             <button @click="columnTabs[timeframe] = false" :class="!columnTabs[timeframe] ? 'bg-white text-matcha shadow-sm' : 'text-graphite/50 hover:text-graphite'" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all">{{ label[0] }}</button>
@@ -243,7 +245,7 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- PAGE 2: Planner -->
+      <!-- PAGE 2: Planner (全周期规划，已全面升级为带切换与时光传送带) -->
       <div v-else-if="currentRoute === 'planner'" class="p-8 lg:p-12 max-w-6xl mx-auto space-y-8 animate-fade-in">
         <header><h1 class="text-3xl font-bold">全周期规划</h1></header>
         <div class="flex gap-2 bg-warmgray/50 p-1 rounded-xl w-max border border-warmgray">
@@ -253,15 +255,29 @@ onMounted(() => {
           </button>
         </div>
         <div class="space-y-6">
-          <div v-for="timeframe in ['日计划', '周计划', '月计划']" :key="timeframe" class="bg-white p-6 rounded-2xl border border-warmgray shadow-sm">
+          <div v-for="(label, timeframe) in {'日计划': ['今日', '明日'], '周计划': ['本周', '下周'], '月计划': ['本月', '下月']}" :key="timeframe" class="bg-white p-6 rounded-2xl border border-warmgray shadow-sm">
+            
             <div class="flex justify-between items-center border-b border-warmgray pb-4 mb-4">
-              <h3 class="font-bold text-lg text-graphite flex items-center gap-2"><Calendar class="w-5 h-5 text-matcha" /> {{ timeframe }}</h3>
-              <button @click="addTask(timeframe, plannerTab)" class="text-matcha hover:bg-matcha/10 p-2 rounded-full flex gap-1 items-center text-xs"><Plus class="w-4 h-4" /> 添加任务</button>
+              <h3 class="font-bold text-lg text-graphite flex items-center gap-2">
+                <Calendar class="w-5 h-5 text-matcha" /> {{ timeframe }}
+              </h3>
+              <div class="flex items-center gap-4">
+                <!-- 切换开关：今日/明日、本周/下周、本月/下月 -->
+                <div class="flex bg-warmgray/50 p-1 rounded-xl">
+                    <button @click="plannerColumnTabs[timeframe] = false" :class="!plannerColumnTabs[timeframe] ? 'bg-white text-matcha shadow-sm' : 'text-graphite/50 hover:text-graphite'" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all">{{ label[0] }}</button>
+                    <button @click="plannerColumnTabs[timeframe] = true" :class="plannerColumnTabs[timeframe] ? 'bg-white text-matcha shadow-sm' : 'text-graphite/50 hover:text-graphite'" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all">{{ label[1] }}</button>
+                </div>
+                <button @click="addTask(timeframe, plannerTab, plannerColumnTabs[timeframe])" class="text-matcha hover:bg-matcha/10 p-2 rounded-full flex gap-1 items-center text-xs font-bold"><Plus class="w-4 h-4" /> 添加任务</button>
+              </div>
             </div>
+
             <div class="space-y-3">
-              <TaskItem v-for="task in getTasks(timeframe, plannerTab)" :key="task.id" :task="task" @delete="deleteTask" @cycle="cyclePriority" />
-              <div v-if="getTasks(timeframe, plannerTab).length === 0" class="text-sm text-graphite/40 py-4 text-center">在此添加你的 {{ plannerTab }} {{ timeframe }}...</div>
+              <TaskItem v-for="task in getTasks(timeframe, plannerTab, plannerColumnTabs[timeframe])" :key="task.id" :task="task" @delete="deleteTask" @cycle="cyclePriority" />
+              <div v-if="getTasks(timeframe, plannerTab, plannerColumnTabs[timeframe]).length === 0" class="text-sm text-graphite/40 py-6 text-center italic">
+                提前规划你的 {{ plannerTab }} {{ plannerColumnTabs[timeframe] ? label[1] : label[0] }}...
+              </div>
             </div>
+
           </div>
         </div>
       </div>
