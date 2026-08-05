@@ -12,7 +12,7 @@ import TaskItem from './components/TaskItem.vue'
 
 // 1. Destructure everything from our workspace composable so we can use them directly in the template
 const {
-  activeTab, schedules, plans, toggleSchedule, addSchedule, deleteSchedule, getSchedulesForDate, togglePlanTask, addPlanTask, deletePlanTask, getPlans, // [核心接入] 工作计划新接口
+  activeTab, schedules, plans, toggleSchedule, addSchedule, deleteSchedule, getSchedulesForDate, togglePlanTask, addPlanTask, deletePlanTask, getPlans, 
   isSupabaseConfigured, isSyncing, loadData,
   tasks, health, getTasks, addTask, deleteTask, cyclePriority, proteinTarget,
   douyinProgress, douyinTopics, douyinOrders, youtubeSkillProgress, youtubeProdProgress, youtubeTopics, addDouyinItem, removeDouyinItem, addYoutubeTopic, removeYoutubeTopic,
@@ -37,7 +37,7 @@ const showAnswer = ref(false)
 const jpQuizIndex = ref(0)
 const showJpAnswer = ref(false)
 
-// [核心] 控制计划板切换 (false代表当前, true代表下一个周期)
+// [核心] 控制计划板切换 (false代表当前/今日/本周/本月, true代表下一个周期/明日/下周/下月)
 const columnTabs = ref({ '日计划': false, '周计划': false, '月计划': false })
 const newPlanInputs = ref({ '日计划': '', '周计划': '', '月计划': '' })
 
@@ -50,7 +50,7 @@ const handleAddNewPlan = (timeframe) => {
     }
 }
 
-// 计算本周日历数据（给上半部分的横向苹果日程表使用）
+// 计算本周日历数据
 const currentWeek = ref([])
 const initCurrentWeek = () => {
     const today = new Date();
@@ -71,7 +71,6 @@ const initCurrentWeek = () => {
         };
     });
 }
-
 
 const navItems = [
   { id: 'work', icon: LayoutDashboard, label: '工作计划' },
@@ -160,17 +159,17 @@ onMounted(() => {
     <!-- Main Content Area -->
     <main class="flex-1 overflow-y-auto bg-cream">
       
-      <!-- PAGE 1: Today (工作计划页面改造) -->
+      <!-- PAGE 1: Today -->
       <div v-if="currentRoute === 'work'" class="p-8 lg:p-12 max-w-7xl mx-auto space-y-8 animate-fade-in">
         <header>
           <h2 class="text-sm font-medium text-graphite/50 mb-2">{{ todayDate }}</h2>
           <h1 class="text-3xl font-bold flex items-center gap-4">工作计划与日程</h1>
         </header>
 
-        <!-- 新结构：上下两层布局 -->
+        <!-- 上下两层布局 -->
         <div class="flex flex-col gap-8">
             
-            <!-- 上半部分：本周关键日程表 -->
+            <!-- 上半部分：本周关键日程表（已去除滚动条，增大核心字体占比） -->
             <div class="bg-white rounded-3xl p-6 shadow-sm border border-warmgray overflow-hidden">
                 <h3 class="font-bold text-lg text-graphite mb-6 flex items-center gap-2"><CalendarClock class="w-5 h-5 text-matcha" /> 本周日程</h3>
                 <div class="overflow-x-auto pb-2">
@@ -180,16 +179,14 @@ onMounted(() => {
                                 <div class="text-[11px] font-bold tracking-widest">{{ day.dayName }}</div>
                                 <div class="text-lg font-black mt-0.5">{{ day.dateStr }}</div>
                             </div>
-                            <div class="p-2 flex-1 min-h-[140px] space-y-2 relative group flex flex-col">
-                                <!-- 日程卡片 -->
-                                <div v-for="item in getSchedulesForDate(day.fullDate)" :key="item.id" class="relative bg-white border border-warmgray rounded-xl p-2.5 shadow-sm group/item">
+                            <div class="p-2 flex-1 min-h-[160px] space-y-2 relative group flex flex-col">
+                                <!-- 日程卡片：优化字体占比，移除滚动条 -->
+                                <div v-for="item in getSchedulesForDate(day.fullDate)" :key="item.id" class="relative bg-white border border-warmgray rounded-xl p-3 shadow-sm group/item space-y-1">
                                     <button @click="deleteSchedule(item.id)" class="absolute -top-2 -right-2 bg-white border border-warmgray text-red-400 rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover/item:opacity-100 hover:text-red-600 shadow-sm z-10 transition-opacity"><Trash2 class="w-3 h-3" /></button>
-                                    <input type="text" v-model="item.timeNote" placeholder="时间(如14:00)" class="w-full text-matcha text-xs font-bold bg-transparent outline-none mb-1">
-                                    <textarea v-model="item.title" placeholder="输入日程..." class="w-full text-graphite text-xs bg-transparent outline-none resize-none h-12 leading-relaxed"></textarea>
+                                    <input type="text" v-model="item.timeNote" placeholder="时间(14:00)" class="w-full text-matcha text-sm font-extrabold bg-transparent outline-none">
+                                    <textarea v-model="item.title" placeholder="输入日程..." class="w-full text-graphite text-sm font-semibold bg-transparent outline-none resize-none overflow-hidden leading-snug" rows="2" @input="(e) => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px' }"></textarea>
                                 </div>
-                                <!-- 底部填空的弹性空间 -->
                                 <div class="flex-1"></div>
-                                <!-- 新增日程按钮 -->
                                 <button @click="addSchedule(day.fullDate, '新日程安排')" class="w-full py-2 rounded-lg border-2 border-dashed border-warmgray text-graphite/40 hover:text-matcha hover:border-matcha transition-colors opacity-0 group-hover:opacity-100 font-bold flex justify-center mt-2">
                                     <Plus class="w-4 h-4" />
                                 </button>
@@ -199,16 +196,13 @@ onMounted(() => {
                 </div>
             </div>
 
-            <!-- 下半部分：日/周/月计划（带时光胶囊切换） -->
+            <!-- 下半部分：日/周/月计划（已去除 Emoji 图标，规范今日/明日等标签） -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div v-for="(label, timeframe) in {'日计划': ['今日', '明日'], '周计划': ['本周', '下周'], '月计划': ['本月', '下月']}" :key="timeframe" class="bg-white p-6 rounded-3xl border border-warmgray shadow-sm flex flex-col">
                     
-                    <!-- 头部切换器 -->
+                    <!-- 头部切换器（无 Emoji 纯净标题） -->
                     <div class="flex justify-between items-center border-b border-warmgray pb-4 mb-4">
-                        <h3 class="font-bold text-graphite text-lg flex items-center gap-2">
-                            <span v-if="timeframe==='日计划'">📝</span>
-                            <span v-if="timeframe==='周计划'">📌</span>
-                            <span v-if="timeframe==='月计划'">🎯</span>
+                        <h3 class="font-bold text-graphite text-lg">
                             {{ timeframe }}
                         </h3>
                         <div class="flex bg-warmgray/50 p-1 rounded-xl">
@@ -224,20 +218,16 @@ onMounted(() => {
                             :class="[task.completed ? 'bg-warmgray/40 border-transparent opacity-60' : 'bg-white border-warmgray hover:border-graphite/20']"
                             @click="togglePlanTask(timeframe, task.id)">
                             
-                            <!-- 任务内容 -->
                             <div class="flex items-center gap-3">
-                                <!-- 复选框 -->
                                 <button class="shrink-0 flex items-center justify-center transition-all mt-0.5">
                                     <CheckCircle v-if="task.completed" class="w-[18px] h-[18px] text-matcha" />
                                     <div v-else class="w-4 h-4 rounded-[4px] border border-graphite/30 bg-white hover:border-matcha/50 transition-colors"></div>
                                 </button>
                                 <span class="text-sm font-medium break-words whitespace-pre-wrap leading-relaxed" :class="[task.completed ? 'line-through text-graphite/50' : 'text-graphite']">{{ task.title }}</span>
                             </div>
-                            <!-- 删除按钮 -->
                             <button @click.stop="deletePlanTask(timeframe, task.id)" class="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity p-1 shrink-0"><Trash2 class="w-4 h-4" /></button>
                         </div>
                         
-                        <!-- 空状态 -->
                         <div v-if="getPlans(timeframe, columnTabs[timeframe]).length === 0" class="text-xs text-graphite/40 py-8 text-center italic border-2 border-dashed border-warmgray rounded-2xl">
                             提前规划你的{{ columnTabs[timeframe] ? label[1] : label[0] }}...
                         </div>
@@ -253,7 +243,7 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- PAGE 2: Planner (保持不变) -->
+      <!-- PAGE 2: Planner -->
       <div v-else-if="currentRoute === 'planner'" class="p-8 lg:p-12 max-w-6xl mx-auto space-y-8 animate-fade-in">
         <header><h1 class="text-3xl font-bold">全周期规划</h1></header>
         <div class="flex gap-2 bg-warmgray/50 p-1 rounded-xl w-max border border-warmgray">
@@ -276,7 +266,7 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- PAGE 3: Health (保持不变) -->
+      <!-- PAGE 3: Health -->
       <div v-else-if="currentRoute === 'health'" class="p-8 lg:p-12 max-w-5xl mx-auto space-y-8 animate-fade-in">
         <h1 class="text-3xl font-bold mb-8">健康与身体指标</h1>
         <div class="bg-white rounded-2xl border border-warmgray shadow-sm overflow-hidden mb-6">
@@ -312,7 +302,7 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- PAGE 4: Video (保持不变) -->
+      <!-- PAGE 4: Video -->
       <div v-else-if="currentRoute === 'video'" class="p-8 lg:p-12 max-w-6xl mx-auto space-y-8 animate-fade-in">
         <header class="flex justify-between items-center">
           <h1 class="text-3xl font-bold">视频灵感与内容矩阵</h1>
@@ -385,7 +375,7 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- PAGE 5: English (保持不变) -->
+      <!-- PAGE 5: English -->
       <div v-else-if="currentRoute === 'english'" class="p-8 lg:p-12 max-w-6xl mx-auto space-y-8 animate-fade-in">
         <header class="flex justify-between items-center mb-8">
           <h1 class="text-3xl font-bold">英文学习</h1>
@@ -492,7 +482,7 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- PAGE 6: Japanese (保持不变) -->
+      <!-- PAGE 6: Japanese -->
       <div v-else-if="currentRoute === 'japanese'" class="p-8 lg:p-12 max-w-6xl mx-auto space-y-8 animate-fade-in">
         <header class="flex justify-between items-center mb-8">
           <h1 class="text-3xl font-bold">日语学习</h1>
@@ -577,7 +567,7 @@ onMounted(() => {
               <div v-if="showJpAnswer" class="mt-8 p-6 bg-cream border border-warmgray rounded-2xl space-y-2"><div class="text-3xl font-bold text-matcha">{{ jpReviewTasks[jpQuizIndex].word }}</div><div class="text-sm text-graphite/60 font-mono">读音: {{ jpReviewTasks[jpQuizIndex].kana }}</div><p class="text-graphite/70 text-sm leading-relaxed border-l-2 border-matcha/30 pl-4 text-left inline-block mt-2">{{ jpReviewTasks[jpQuizIndex].sentence }}</p></div>
               <div v-else class="mt-8 p-8 border-2 border-dashed border-warmgray rounded-2xl text-graphite/40 bg-warmgray/10 text-sm">努力回想一下...</div>
             </div>
-            <div class="flex gap-4 mt-12"><button v-if="!showJpAnswer" @click="showJpAnswer = true" class="flex-1 bg-graphite text-white py-4 rounded-xl font-bold shadow-md hover:bg-graphite/80">显示答案</button><template v-else><button @click="nextJpQuiz()" class="flex-1 bg-red-50 text-red-500 border border-red-100 py-4 rounded-xl font-bold hover:bg-red-100">没想起来</button><button @click="nextJpQuiz()" class="flex-1 bg-matcha text-white py-4 rounded-xl font-bold hover:bg-matcha/90 shadow-md">记住了</button></template></div>
+            <div class="flex gap-4 mt-12"><button v-if="!showJpAnswer" @click="showJpAnswer = true" class="flex-1 bg-graphite text-white py-4 rounded-xl font-bold shadow-md hover:bg-graphite/80">显示答案</button><template v-else><button @click="nextJpQuiz()" class="flex-1 bg-red-50 text-red-500 border border-red-100 py-4 rounded-xl font-bold hover:bg-red-100">没想起来</button><button @click="nextJpQuiz()" class="flex-1 bg-matcha text-white py-4 rounded-xl font-bold shadow-md hover:bg-matcha/90 shadow-md">记住了</button></template></div>
           </div>
         </div>
       </div>
