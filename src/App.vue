@@ -1,20 +1,20 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { 
   Cloud, CloudOff, ChevronLeft, ChevronRight, LayoutDashboard, CalendarDays, HeartPulse, 
   Clapperboard, Languages, BookOpen, Plus, Calendar, Flower2, Beef, TrendingUp, Lightbulb, 
   Trash2, BadgeDollarSign, Award, Video, Newspaper, UploadCloud, Library, Mic, PlayCircle, 
   Edit3, BookMarked, CalendarClock, BrainCircuit, PartyPopper, Target, FileUp, CheckCircle, 
-  Circle, Sparkles 
+  Circle, Sparkles, Dumbbell, Activity 
 } from 'lucide-vue-next'
 import { useWorkspace } from './composables/useWorkspace'
 import TaskItem from './components/TaskItem.vue'
 
-// 1. Destructure everything from our workspace composable so we can use them directly in the template
+// 1. Destructure everything from our workspace composable
 const {
   activeTab, schedules, plans, toggleSchedule, addSchedule, deleteSchedule, getSchedulesForDate, togglePlanTask, addPlanTask, deletePlanTask, getPlans, 
   isSupabaseConfigured, isSyncing, loadData,
-  tasks, health, getTasks, addTask, deleteTask, cyclePriority, proteinTarget,
+  tasks, health, addHealthRecord, workoutPlans, getTasks, addTask, deleteTask, cyclePriority, proteinTarget,
   douyinProgress, douyinTopics, douyinOrders, youtubeSkillProgress, youtubeProdProgress, youtubeTopics, addDouyinItem, removeDouyinItem, addYoutubeTopic, removeYoutubeTopic,
   englishShortProgress, englishLongProgress, englishBooks, englishShadowing, collocations, addEnglishBook, removeEnglishBook, addShadowing, removeShadowing, addCollocation, removeCollocation, reviewTasks,
   japaneseProgress, japaneseBooks, jpTasks, jpVocabularies, addJapaneseBook, removeJapaneseBook, getJpTasks, addJpTask, deleteJpTask, addJpVocab, removeJpVocab, jpReviewTasks
@@ -37,12 +37,27 @@ const showAnswer = ref(false)
 const jpQuizIndex = ref(0)
 const showJpAnswer = ref(false)
 
-// [核心] 控制工作计划板切换 (false代表当前, true代表下一个周期)
+// [核心] 控制工作计划板切换
 const columnTabs = ref({ '日计划': false, '周计划': false, '月计划': false })
 const newPlanInputs = ref({ '日计划': '', '周计划': '', '月计划': '' })
 
 // [核心] 控制全周期规划(planner)板切换
 const plannerColumnTabs = ref({ '日计划': false, '周计划': false, '月计划': false })
+
+// [健康页面] 曲线图时间筛选与训练菜单切换
+const healthTimeRange = ref('30') // '7', '30', 'all'
+const activeWorkoutWeek = ref('Week A') // 'Week A' or 'Week B'
+
+// 过滤历史身体数据用于画曲线图
+const filteredHealthHistory = computed(() => {
+  if (!health.value.history || health.value.history.length === 0) return []
+  const sorted = [...health.value.history].sort((a, b) => new Date(a.date) - new Date(b.date))
+  if (healthTimeRange.value === 'all') return sorted
+  const days = parseInt(healthTimeRange.value)
+  const cutoff = new Date()
+  cutoff.setDate(cutoff.getDate() - days)
+  return sorted.filter(h => new Date(h.date) >= cutoff)
+})
 
 // 处理回车或点击加号添加新计划
 const handleAddNewPlan = (timeframe) => {
@@ -84,7 +99,7 @@ const navItems = [
   { id: 'japanese', icon: BookOpen, label: '日文学习' },
 ]
 
-// 3. Drag & Drop Handlers
+// Drag & Drop Handlers
 const handleBookDrop = (event) => {
   isDraggingBook.value = false
   const files = event.dataTransfer.files
@@ -169,7 +184,6 @@ onMounted(() => {
           <h1 class="text-3xl font-bold flex items-center gap-4">工作计划与日程</h1>
         </header>
 
-        <!-- 上下两层布局 -->
         <div class="flex flex-col gap-8">
             
             <!-- 上半部分：本周关键日程表 -->
@@ -198,11 +212,10 @@ onMounted(() => {
                 </div>
             </div>
 
-            <!-- 下半部分：日/周/月计划（标题精简为：日、周、月） -->
+            <!-- 下半部分：日/周/月计划（精简为单字：日、周、月） -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div v-for="(label, timeframe) in {'日计划': ['今日', '明日'], '周计划': ['本周', '下周'], '月计划': ['本月', '下月']}" :key="timeframe" class="bg-white p-6 rounded-3xl border border-warmgray shadow-sm flex flex-col">
                     
-                    <!-- 头部切换器（精简标题为单字：日、周、月） -->
                     <div class="flex justify-between items-center border-b border-warmgray pb-4 mb-4">
                         <h3 class="font-bold text-graphite text-xl">
                             {{ {'日计划': '日', '周计划': '周', '月计划': '月'}[timeframe] }}
@@ -213,7 +226,6 @@ onMounted(() => {
                         </div>
                     </div>
                     
-                    <!-- 任务列表区域 -->
                     <div class="space-y-3 flex-1 min-h-[150px]">
                         <div v-for="task in getPlans(timeframe, columnTabs[timeframe])" :key="task.id" 
                             class="flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer group"
@@ -235,7 +247,6 @@ onMounted(() => {
                         </div>
                     </div>
                     
-                    <!-- 底部添加栏 -->
                     <div class="mt-4 flex gap-2">
                         <input type="text" v-model="newPlanInputs[timeframe]" @keyup.enter="handleAddNewPlan(timeframe)" :placeholder="`添加${columnTabs[timeframe] ? label[1] : label[0]}任务...`" class="flex-1 p-3 rounded-xl border border-warmgray bg-warmgray/10 text-sm focus:outline-none focus:border-matcha text-graphite placeholder:text-graphite/40 transition-colors">
                         <button @click="handleAddNewPlan(timeframe)" class="px-4 py-2 bg-matcha/10 text-matcha rounded-xl text-sm font-bold hover:bg-matcha/20 transition-colors shadow-sm"><Plus class="w-5 h-5" /></button>
@@ -245,7 +256,7 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- PAGE 2: Planner (全周期规划，已全面升级为带切换与时光传送带) -->
+      <!-- PAGE 2: Planner (全周期规划) -->
       <div v-else-if="currentRoute === 'planner'" class="p-8 lg:p-12 max-w-6xl mx-auto space-y-8 animate-fade-in">
         <header><h1 class="text-3xl font-bold">全周期规划</h1></header>
         <div class="flex gap-2 bg-warmgray/50 p-1 rounded-xl w-max border border-warmgray">
@@ -262,7 +273,6 @@ onMounted(() => {
                 <Calendar class="w-5 h-5 text-matcha" /> {{ timeframe }}
               </h3>
               <div class="flex items-center gap-4">
-                <!-- 切换开关：今日/明日、本周/下周、本月/下月 -->
                 <div class="flex bg-warmgray/50 p-1 rounded-xl">
                     <button @click="plannerColumnTabs[timeframe] = false" :class="!plannerColumnTabs[timeframe] ? 'bg-white text-matcha shadow-sm' : 'text-graphite/50 hover:text-graphite'" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all">{{ label[0] }}</button>
                     <button @click="plannerColumnTabs[timeframe] = true" :class="plannerColumnTabs[timeframe] ? 'bg-white text-matcha shadow-sm' : 'text-graphite/50 hover:text-graphite'" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all">{{ label[1] }}</button>
@@ -282,38 +292,120 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- PAGE 3: Health -->
-      <div v-else-if="currentRoute === 'health'" class="p-8 lg:p-12 max-w-5xl mx-auto space-y-8 animate-fade-in">
-        <h1 class="text-3xl font-bold mb-8">健康与身体指标</h1>
-        <div class="bg-white rounded-2xl border border-warmgray shadow-sm overflow-hidden mb-6">
-          <div class="p-6 flex flex-wrap items-center justify-between gap-6">
-            <div class="flex gap-8">
+      <!-- PAGE 3: Health (健康与身体指标 + 曲线图 + 科学减脂抗阻训练计划) -->
+      <div v-else-if="currentRoute === 'health'" class="p-8 lg:p-12 max-w-6xl mx-auto space-y-8 animate-fade-in">
+        <header><h1 class="text-3xl font-bold">健康与身体指标</h1></header>
+
+        <!-- 第一板块：当前指标录入与目标 -->
+        <div class="bg-white rounded-3xl border border-warmgray shadow-sm p-6 lg:p-8 space-y-6">
+          <div class="flex flex-wrap items-center justify-between gap-6 border-b border-warmgray pb-6">
+            <div class="flex flex-wrap gap-6 lg:gap-10">
+              <div><div class="text-xs text-graphite/50 mb-1">身高 (cm)</div><input type="number" v-model.number="health.height" class="w-24 text-3xl font-bold text-graphite bg-transparent border-b border-dashed border-warmgray outline-none focus:border-matcha"></div>
               <div><div class="text-xs text-graphite/50 mb-1">今日体重 (kg)</div><input type="number" v-model.number="health.weight" class="w-24 text-3xl font-bold text-graphite bg-transparent border-b border-dashed border-warmgray outline-none focus:border-matcha"></div>
               <div><div class="text-xs text-graphite/50 mb-1">目标体重 (kg)</div><input type="number" v-model.number="health.targetWeight" class="w-24 text-3xl font-bold text-matcha bg-transparent border-b border-dashed border-warmgray outline-none focus:border-matcha"></div>
               <div><div class="text-xs text-graphite/50 mb-1">体脂率 (%)</div><input type="number" v-model.number="health.bodyFat" class="w-24 text-3xl font-bold text-graphite bg-transparent border-b border-dashed border-warmgray outline-none focus:border-matcha"></div>
+              <div><div class="text-xs text-graphite/50 mb-1">目标体脂 (%)</div><input type="number" v-model.number="health.targetBodyFat" class="w-24 text-3xl font-bold text-matcha bg-transparent border-b border-dashed border-warmgray outline-none focus:border-matcha"></div>
+            </div>
+            <button @click="addHealthRecord" class="bg-matcha text-white px-6 py-3 rounded-xl font-bold text-sm shadow-md hover:bg-matcha/90 transition-all flex items-center gap-2">
+              <Plus class="w-4 h-4" /> 记录今日数据
+            </button>
+          </div>
+
+          <!-- 第二板块：身体数据趋势曲线图 -->
+          <div class="space-y-4 pt-2">
+            <div class="flex justify-between items-center">
+              <h3 class="font-bold text-graphite flex items-center gap-2"><Activity class="w-5 h-5 text-matcha" /> 体重与体脂变化趋势</h3>
+              <div class="flex bg-warmgray/50 p-1 rounded-xl">
+                <button @click="healthTimeRange = '7'" :class="healthTimeRange === '7' ? 'bg-white text-matcha shadow-sm' : 'text-graphite/50'" class="px-3 py-1 rounded-lg text-xs font-bold transition-all">近 7 天</button>
+                <button @click="healthTimeRange = '30'" :class="healthTimeRange === '30' ? 'bg-white text-matcha shadow-sm' : 'text-graphite/50'" class="px-3 py-1 rounded-lg text-xs font-bold transition-all">近 30 天</button>
+                <button @click="healthTimeRange = 'all'" :class="healthTimeRange === 'all' ? 'bg-white text-matcha shadow-sm' : 'text-graphite/50'" class="px-3 py-1 rounded-lg text-xs font-bold transition-all">全部</button>
+              </div>
+            </div>
+
+            <!-- 简单的 SVG 趋势曲线图表 -->
+            <div class="bg-cream border border-warmgray rounded-2xl p-6 relative h-64 flex flex-col justify-end">
+              <div v-if="filteredHealthHistory.length < 2" class="absolute inset-0 flex items-center justify-center text-graphite/40 text-sm italic">
+                记录多于 2 天的数据后，将自动生成动态趋势曲线📈
+              </div>
+              <svg v-else class="w-full h-48 overflow-visible" viewBox="0 0 500 150">
+                <!-- 网格辅助线 -->
+                <line x1="0" y1="0" x2="500" y2="0" stroke="#e5e7eb" stroke-dasharray="4" />
+                <line x1="0" y1="75" x2="500" y2="75" stroke="#e5e7eb" stroke-dasharray="4" />
+                <line x1="0" y1="150" x2="500" y2="150" stroke="#e5e7eb" stroke-dasharray="4" />
+                
+                <!-- 动态折线：体重曲线 (绿色) -->
+                <polyline
+                  fill="none"
+                  stroke="#4E6E5D"
+                  stroke-width="3"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  :points="filteredHealthHistory.map((h, i) => {
+                    const x = (i / (filteredHealthHistory.length - 1)) * 480 + 10;
+                    const minW = Math.min(...filteredHealthHistory.map(x => x.weight)) - 2;
+                    const maxW = Math.max(...filteredHealthHistory.map(x => x.weight)) + 2;
+                    const y = 140 - ((h.weight - minW) / (maxW - minW || 1)) * 130;
+                    return `${x},${y}`;
+                  }).join(' ')"
+                />
+                <!-- 数据圆点 -->
+                <circle
+                  v-for="(h, i) in filteredHealthHistory"
+                  :key="i"
+                  :cx="(i / (filteredHealthHistory.length - 1)) * 480 + 10"
+                  :cy="140 - ((h.weight - Math.min(...filteredHealthHistory.map(x => x.weight)) - 2) / (Math.max(...filteredHealthHistory.map(x => x.weight)) - Math.min(...filteredHealthHistory.map(x => x.weight)) + 4 || 1)) * 130"
+                  r="4"
+                  fill="#4E6E5D"
+                />
+              </svg>
+              <div class="flex justify-between text-xs text-graphite/50 mt-2 px-1">
+                <span>起始: {{ filteredHealthHistory[0]?.date }} ({{ filteredHealthHistory[0]?.weight }}kg)</span>
+                <span class="font-bold text-matcha">目标: 年底降至 58kg / 26% 体脂</span>
+                <span>最新: {{ filteredHealthHistory[filteredHealthHistory.length - 1]?.date }} ({{ filteredHealthHistory[filteredHealthHistory.length - 1]?.weight }}kg)</span>
+              </div>
             </div>
           </div>
         </div>
-        <div class="grid grid-cols-1 gap-6">
-          <div class="bg-white p-6 rounded-2xl border border-warmgray shadow-sm">
-            <div class="flex justify-between items-center mb-5">
-              <h3 class="font-bold text-graphite flex items-center gap-2"><Flower2 class="w-5 h-5 text-matcha" /> Stacy Sims 生理与训练指南</h3>
+
+        <!-- 第三板块：科学减脂抗阻训练计划 (Week A / Week B 切换) -->
+        <div class="bg-white rounded-3xl border border-warmgray shadow-sm p-6 lg:p-8 space-y-6">
+          <div class="flex flex-wrap justify-between items-center border-b border-warmgray pb-4">
+            <h3 class="font-bold text-xl text-graphite flex items-center gap-2">
+              <Dumbbell class="w-6 h-6 text-matcha" /> 专属科学抗阻训练计划 (生活化减脂)
+            </h3>
+            <div class="flex bg-warmgray/50 p-1 rounded-xl">
+              <button @click="activeWorkoutWeek = 'Week A'" :class="activeWorkoutWeek === 'Week A' ? 'bg-white text-matcha shadow-sm' : 'text-graphite/50'" class="px-5 py-2 rounded-lg text-xs font-bold transition-all">Week A 周期</button>
+              <button @click="activeWorkoutWeek = 'Week B'" :class="activeWorkoutWeek === 'Week B' ? 'bg-white text-matcha shadow-sm' : 'text-graphite/50'" class="px-5 py-2 rounded-lg text-xs font-bold transition-all">Week B 周期</button>
             </div>
-            <div class="space-y-5 text-sm">
-              <div class="flex items-center justify-between">
-                <span class="text-graphite/60 font-medium">当前生理周期阶段</span>
-                <select v-model="health.cycle_phase" class="bg-warmgray/30 border border-warmgray rounded-lg px-3 py-1.5 outline-none text-graphite cursor-pointer font-medium hover:border-matcha transition-colors">
-                  <option value="follicular">卵泡期 (低激素) - 适合突破</option>
-                  <option value="luteal">黄体期 (高激素) - 适合耐力</option>
-                  <option value="menstruation">经期阶段 - 倾听身体</option>
-                  <option value="menopause">围绝经期 - 力量优先</option>
-                </select>
+          </div>
+
+          <!-- 训练天数列表 -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div v-for="(dayPlan, idx) in workoutPlans[activeWorkoutWeek]" :key="idx" class="border border-warmgray rounded-2xl p-5 bg-warmgray/10 space-y-4 hover:border-matcha/40 transition-all">
+              <div class="flex justify-between items-start border-b border-warmgray/60 pb-3">
+                <div>
+                  <h4 class="font-extrabold text-graphite text-base">{{ dayPlan.day }}</h4>
+                  <p class="text-xs text-matcha font-bold mt-0.5">Focus: {{ dayPlan.focus }}</p>
+                </div>
+                <span class="bg-matcha/10 text-matcha px-2.5 py-1 rounded-full text-[11px] font-bold">四周轮换</span>
               </div>
-              <div class="flex items-center justify-between border-t border-warmgray pt-4 mt-2">
-                <div class="flex items-center gap-2"><Beef class="w-4 h-4 text-graphite/50" /><span class="text-graphite/60">每日基础抗阻蛋白目标</span></div>
-                <div class="flex items-baseline gap-1"><span class="text-xl font-bold text-matcha">{{ proteinTarget }}</span><span class="text-xs text-graphite/50">g</span></div>
+              <div class="space-y-2.5">
+                <div v-for="(ex, eIdx) in dayPlan.exercises" :key="eIdx" class="bg-white p-3 rounded-xl border border-warmgray/80 flex justify-between items-center text-xs">
+                  <div>
+                    <span class="font-bold text-graphite text-sm">{{ ex.name }}</span>
+                    <p class="text-graphite/50 mt-0.5">{{ ex.sets }} | 建议: {{ ex.weight }}</p>
+                  </div>
+                  <span class="text-matcha font-mono font-bold bg-matcha/5 px-2 py-1 rounded">{{ ex.rir }}</span>
+                </div>
               </div>
             </div>
+          </div>
+
+          <div class="bg-cream border border-warmgray rounded-2xl p-4 text-xs text-graphite/70 space-y-1">
+            <p class="font-bold text-graphite">💡 安全与生活化减脂小叮嘱：</p>
+            <p>1. <strong>低血糖防范：</strong> 严禁空腹游泳或空腹有氧，训练前1小时补充易消化碳水，包里常备糖果。</p>
+            <p>2. <strong>扁平足关照：</strong> 下肢力量多用器械和稳定动作，硬拉/分腿蹲时注意鞋底支撑，避免足弓过度塌陷。</p>
+            <p>3. <strong>温和节奏：</strong> 结合静息能约1500大卡，稳步向年底 58kg / 26% 推进，拒绝极端断食！</p>
           </div>
         </div>
       </div>
